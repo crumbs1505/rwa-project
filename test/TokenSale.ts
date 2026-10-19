@@ -291,6 +291,67 @@ describe("TokenSale", function () {
     });
   });
 
+  describe("purchase recovery", function () {
+    it("moves an unclaimed purchase to a new wallet after compliance loss", async function () {
+      const { sale, token, compliance, issuer, alice, bob, start, end } =
+        await networkHelpers.loadFixture(deploySale);
+      await time.increaseTo(start);
+      await sale.connect(alice).buy(SOFT_CAP);
+      await time.increaseTo(end);
+      await sale.finalize();
+
+      // Alice is frozen after the sale and can no longer claim
+      await token.connect(compliance).setFrozen(alice.address, true);
+
+      await expect(
+        sale.connect(issuer).recoverPurchase(alice.address, bob.address),
+      )
+        .to.emit(sale, "PurchaseRecovered")
+        .withArgs(alice.address, bob.address, SOFT_CAP, USDC(5_000));
+
+      await expect(
+        sale.connect(alice).claimTokens(),
+      ).to.be.revertedWith("TokenSale: nothing to claim");
+      await sale.connect(bob).claimTokens();
+      expect(await token.balanceOf(bob.address)).to.equal(SOFT_CAP);
+    });
+
+    it("moves the refund entitlement when the sale failed", async function () {
+      const { sale, usdc, issuer, alice, bob, start, end } =
+        await networkHelpers.loadFixture(deploySale);
+      await time.increaseTo(start);
+      await sale.connect(alice).buy(TOKENS(10));
+      await time.increaseTo(end);
+      await sale.finalize();
+
+      await sale.connect(issuer).recoverPurchase(alice.address, bob.address);
+      const before = await usdc.balanceOf(bob.address);
+      await sale.connect(bob).refund();
+      expect(await usdc.balanceOf(bob.address)).to.equal(before + USDC(500));
+    });
+
+    it("requires a compliant new wallet and something to recover", async function () {
+      const { sale, issuer, alice, bob, outsider, start } =
+        await networkHelpers.loadFixture(deploySale);
+
+      await expect(
+        sale.connect(issuer).recoverPurchase(alice.address, bob.address),
+      ).to.be.revertedWith("TokenSale: nothing to recover");
+
+      await time.increaseTo(start);
+      await sale.connect(alice).buy(TOKENS(10));
+      await expect(
+        sale.connect(issuer).recoverPurchase(alice.address, outsider.address),
+      ).to.be.revertedWith("TokenSale: buyer not whitelisted");
+      await expect(
+        sale.connect(issuer).recoverPurchase(alice.address, alice.address),
+      ).to.be.revertedWith("TokenSale: same wallet");
+      await expect(
+        sale.connect(alice).recoverPurchase(alice.address, bob.address),
+      ).to.be.revertedWithCustomError(sale, "AccessControlUnauthorizedAccount");
+    });
+  });
+
   describe("deployment", function () {
     it("rejects invalid configuration", async function () {
       const [admin, treasury] = await ethers.getSigners();
