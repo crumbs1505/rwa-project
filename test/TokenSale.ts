@@ -318,19 +318,17 @@ describe("TokenSale", function () {
           base.end,
         ];
       };
-      const Sale = await ethers.getContractFactory("TokenSale");
-
-      await expect(Sale.deploy(...args({ price: 0 }))).to.be.revertedWith(
-        "TokenSale: zero price",
-      );
       await expect(
-        Sale.deploy(...args({ soft: HARD_CAP + 1n })),
+        ethers.deployContract("TokenSale", args({ price: 0 })),
+      ).to.be.revertedWith("TokenSale: zero price");
+      await expect(
+        ethers.deployContract("TokenSale", args({ soft: HARD_CAP + 1n })),
       ).to.be.revertedWith("TokenSale: invalid caps");
       await expect(
-        Sale.deploy(...args({ min: HARD_CAP + 1n })),
+        ethers.deployContract("TokenSale", args({ min: HARD_CAP + 1n })),
       ).to.be.revertedWith("TokenSale: invalid minimum");
       await expect(
-        Sale.deploy(...args({ end: now })),
+        ethers.deployContract("TokenSale", args({ end: now })),
       ).to.be.revertedWith("TokenSale: invalid window");
     });
   });
