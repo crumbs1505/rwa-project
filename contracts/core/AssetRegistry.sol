@@ -32,6 +32,7 @@ contract AssetRegistry is RWARoles {
     }
 
     function deactivateAsset(uint256 assetId) external onlyRole(ISSUER_ROLE) {
+        require(assetId < assetCount, "AssetRegistry: unknown asset");
         assets[assetId].active = false;
         emit AssetDeactivated(assetId);
     }

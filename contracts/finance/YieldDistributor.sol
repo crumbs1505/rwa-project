@@ -3,9 +3,13 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../governance/RWARoles.sol";
+import "../interfaces/IYieldHook.sol";
 
-contract YieldDistributor is RWARoles, ReentrancyGuard {
+contract YieldDistributor is RWARoles, ReentrancyGuard, IYieldHook {
+    using SafeERC20 for IERC20;
+
     // ── State ────────────────────────────────────────────────────────────
 
     IERC20 public immutable rentalIncomeToken; // MockUSDC — the token yield is paid in
@@ -71,7 +75,7 @@ contract YieldDistributor is RWARoles, ReentrancyGuard {
         totalRentalIncomeDeposited += amount;
 
         // Pull USDC from issuer into this contract
-        rentalIncomeToken.transferFrom(msg.sender, address(this), amount);
+        rentalIncomeToken.safeTransferFrom(msg.sender, address(this), amount);
 
         emit RentalIncomeDeposited(amount);
     }
@@ -91,9 +95,24 @@ contract YieldDistributor is RWARoles, ReentrancyGuard {
         pendingYield[msg.sender] = 0;
 
         // Step 4 — send USDC to holder
-        rentalIncomeToken.transfer(msg.sender, amountOwed);
+        rentalIncomeToken.safeTransfer(msg.sender, amountOwed);
 
         emit YieldClaimed(msg.sender, amountOwed);
+    }
+
+    // ── Token hook ───────────────────────────────────────────────────────
+
+    // Called by the property token BEFORE balances change on every
+    // transfer, mint and burn. Without this, a buyer would start with a
+    // snapshot of 0 and could claim yield earned before they held tokens.
+    function onTokenTransfer(address from, address to) external {
+        require(
+            msg.sender == address(propertyToken),
+            "YieldDistributor: caller is not the property token"
+        );
+        // address(0) means mint (from) or burn (to) — nothing to settle
+        if (from != address(0)) _snapshotHolderYield(from);
+        if (to != address(0)) _snapshotHolderYield(to);
     }
 
     // ── Internal ─────────────────────────────────────────────────────────

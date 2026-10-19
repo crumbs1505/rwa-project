@@ -3,13 +3,18 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol";
 import "../governance/RWARoles.sol";
+import "../interfaces/IYieldHook.sol";
 
 contract RWAToken is ERC20Pausable, RWARoles {
     mapping(address => bool) public whitelist;
     mapping(address => bool) public frozen;
 
+    // Notified before every balance change so yield is settled on old balances
+    IYieldHook public yieldDistributor;
+
     event WhitelistUpdated(address indexed account, bool status);
     event FrozenUpdated(address indexed account, bool status);
+    event YieldDistributorUpdated(address indexed distributor);
 
     constructor(
         string memory name,
@@ -41,6 +46,13 @@ contract RWAToken is ERC20Pausable, RWARoles {
         emit FrozenUpdated(account, status);
     }
 
+    function setYieldDistributor(
+        address distributor
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        yieldDistributor = IYieldHook(distributor);
+        emit YieldDistributorUpdated(distributor);
+    }
+
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
@@ -60,6 +72,9 @@ contract RWAToken is ERC20Pausable, RWARoles {
         if (to != address(0)) {
             require(whitelist[to], "RWAToken: receiver not whitelisted");
             require(!frozen[to], "RWAToken: receiver frozen");
+        }
+        if (address(yieldDistributor) != address(0)) {
+            yieldDistributor.onTokenTransfer(from, to);
         }
         super._update(from, to, value);
     }
