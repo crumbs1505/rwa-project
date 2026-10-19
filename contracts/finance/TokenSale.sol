@@ -61,6 +61,12 @@ contract TokenSale is RWARoles, ReentrancyGuard {
     event SaleFinalized(State outcome, uint256 tokensSold, uint256 totalRaised);
     event TokensClaimed(address indexed buyer, uint256 tokenAmount);
     event Refunded(address indexed buyer, uint256 amount);
+    event PurchaseRecovered(
+        address indexed lostWallet,
+        address indexed newWallet,
+        uint256 tokenAmount,
+        uint256 amountPaid
+    );
 
     // ── Constructor ──────────────────────────────────────────────────────
 
@@ -171,6 +177,38 @@ contract TokenSale is RWARoles, ReentrancyGuard {
         paymentToken.safeTransfer(msg.sender, amount);
 
         emit Refunded(msg.sender, amount);
+    }
+
+    // ── Recovery ─────────────────────────────────────────────────────────
+
+    // Move a buyer's unclaimed purchase (and refund entitlement) to another
+    // wallet, e.g. when keys are lost or the original wallet is no longer
+    // allowed to receive tokens. The new wallet must pass the same checks
+    // as a buyer.
+    function recoverPurchase(
+        address lostWallet,
+        address newWallet
+    ) external onlyRole(ISSUER_ROLE) {
+        require(lostWallet != newWallet, "TokenSale: same wallet");
+        require(
+            propertyToken.whitelist(newWallet),
+            "TokenSale: buyer not whitelisted"
+        );
+        require(!propertyToken.frozen(newWallet), "TokenSale: buyer frozen");
+
+        uint256 tokenAmount = tokensPurchased[lostWallet];
+        uint256 paid = amountPaid[lostWallet];
+        require(
+            tokenAmount > 0 || paid > 0,
+            "TokenSale: nothing to recover"
+        );
+
+        tokensPurchased[lostWallet] = 0;
+        amountPaid[lostWallet] = 0;
+        tokensPurchased[newWallet] += tokenAmount;
+        amountPaid[newWallet] += paid;
+
+        emit PurchaseRecovered(lostWallet, newWallet, tokenAmount, paid);
     }
 
     // ── Settlement ───────────────────────────────────────────────────────
