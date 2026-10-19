@@ -1,57 +1,52 @@
-# Sample Hardhat 3 Beta Project (`mocha` and `ethers`)
+# RWA Project — Real World Asset Tokenization
 
-This project showcases a Hardhat 3 Beta project using `mocha` for tests and the `ethers` library for Ethereum interactions.
+Smart contracts for tokenizing a real-world property and paying its rental
+income to token holders. Built with Hardhat 3, OpenZeppelin 5 and ethers v6.
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+## Contracts
 
-## Project Overview
+| Contract | Path | Purpose |
+| --- | --- | --- |
+| `RWARoles` | `contracts/governance/` | Shared roles: `ISSUER_ROLE`, `COMPLIANCE_ROLE`, `PAUSER_ROLE` on top of OpenZeppelin `AccessControl`. |
+| `RWAToken` | `contracts/core/` | ERC-20 share of a property. Only whitelisted, non-frozen accounts can hold or move it; the issuer mints and burns; transfers can be paused. |
+| `AssetRegistry` | `contracts/core/` | On-chain record of each asset: name, valuation, hash of the legal documents, and its token. |
+| `YieldDistributor` | `contracts/finance/` | The issuer deposits rental income (USDC) and holders claim their pro-rata share. |
+| `MockUSDC` | `contracts/finance/` | 6-decimal stablecoin for local testing. |
 
-This example project includes:
+### How yield accounting works
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using `mocha` and ethers.js
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+`YieldDistributor` keeps a global `cumulativeYieldPerToken` that grows on each
+deposit. Every holder has a snapshot of that value. What they can claim is
+`balance × (cumulative − snapshot)` plus anything already settled.
+
+`RWAToken` calls `YieldDistributor.onTokenTransfer` **before** every transfer,
+mint and burn, so both parties are settled at their old balances. A buyer only
+earns yield from deposits made after they received tokens. Without this hook,
+a new holder would start at a snapshot of 0 and could claim yield they never
+earned.
 
 ## Usage
 
-### Running Tests
-
-To run all the tests in the project, execute the following command:
-
 ```shell
-npx hardhat test
+npm install
+npm test                      # runs the mocha test suite
+npx hardhat compile
 ```
 
-You can also selectively run the Solidity or `mocha` tests:
+### Deploy
+
+`ignition/modules/RWA.ts` deploys MockUSDC, RWAToken, YieldDistributor and
+AssetRegistry. It connects the token to the distributor, gives the deployer
+every operational role, and registers the asset.
 
 ```shell
-npx hardhat test solidity
-npx hardhat test mocha
-```
+# local simulated chain
+npm run deploy:local
 
-### Make a deployment to Sepolia
-
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
-
-To run the deployment to a local chain:
-
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
-```
-
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
-
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
-
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
-
-```shell
+# Sepolia (set SEPOLIA_RPC_URL and SEPOLIA_PRIVATE_KEY first, e.g. via hardhat-keystore)
 npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+npx hardhat ignition deploy --network sepolia ignition/modules/RWA.ts
 ```
 
-After setting the variable, you can run the deployment with the Sepolia network:
-
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
-```
+Override the asset details with Ignition parameters (`name`, `symbol`,
+`valuation`, `legalDocHash`).
