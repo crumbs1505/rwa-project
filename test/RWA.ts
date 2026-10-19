@@ -316,3 +316,129 @@ describe("AssetRegistry", function () {
     );
   });
 });
+
+describe("Forced transfer and recovery", function () {
+  it("lets the issuer burn tokens from a frozen account", async function () {
+    const { token, issuer, compliance, alice } =
+      await networkHelpers.loadFixture(deploySystem);
+
+    await token.connect(issuer).mint(alice.address, TOKENS(10));
+    await token.connect(compliance).setFrozen(alice.address, true);
+    await token.connect(compliance).setWhitelist(alice.address, false);
+
+    await token.connect(issuer).burn(alice.address, TOKENS(10));
+    expect(await token.balanceOf(alice.address)).to.equal(0n);
+  });
+
+  it("lets compliance force a transfer out of a frozen account", async function () {
+    const { token, issuer, compliance, alice, bob } =
+      await networkHelpers.loadFixture(deploySystem);
+
+    await token.connect(issuer).mint(alice.address, TOKENS(10));
+    await token.connect(compliance).setFrozen(alice.address, true);
+
+    await expect(
+      token
+        .connect(compliance)
+        .forcedTransfer(alice.address, bob.address, TOKENS(4)),
+    )
+      .to.emit(token, "ForcedTransfer")
+      .withArgs(alice.address, bob.address, TOKENS(4));
+    expect(await token.balanceOf(bob.address)).to.equal(TOKENS(4));
+
+    // Sender checks are restored afterwards
+    await expect(
+      token.connect(alice).transfer(bob.address, TOKENS(1)),
+    ).to.be.revertedWith("RWAToken: sender frozen");
+  });
+
+  it("still checks the receiver of a forced transfer", async function () {
+    const { token, issuer, compliance, alice, bob } =
+      await networkHelpers.loadFixture(deploySystem);
+    const [, , , , , , , outsider] = await ethers.getSigners();
+
+    await token.connect(issuer).mint(alice.address, TOKENS(10));
+    await expect(
+      token
+        .connect(compliance)
+        .forcedTransfer(alice.address, outsider.address, TOKENS(1)),
+    ).to.be.revertedWith("RWAToken: receiver not whitelisted");
+
+    await token.connect(compliance).setFrozen(bob.address, true);
+    await expect(
+      token
+        .connect(compliance)
+        .forcedTransfer(alice.address, bob.address, TOKENS(1)),
+    ).to.be.revertedWith("RWAToken: receiver frozen");
+  });
+
+  it("only lets compliance force transfers and recover wallets", async function () {
+    const { token, issuer, alice, bob } =
+      await networkHelpers.loadFixture(deploySystem);
+
+    await expect(
+      token.connect(issuer).forcedTransfer(alice.address, bob.address, 1n),
+    ).to.be.revertedWithCustomError(token, "AccessControlUnauthorizedAccount");
+    await expect(
+      token.connect(issuer).recoverWallet(alice.address, bob.address),
+    ).to.be.revertedWithCustomError(token, "AccessControlUnauthorizedAccount");
+  });
+
+  it("recovers a lost wallet's tokens and unclaimed yield", async function () {
+    const { token, distributor, usdc, issuer, compliance, alice, bob, carol } =
+      await networkHelpers.loadFixture(deploySystem);
+
+    await token.connect(issuer).mint(alice.address, TOKENS(60));
+    await token.connect(issuer).mint(carol.address, TOKENS(40));
+    await distributor.connect(issuer).depositRentalIncome(USDC(1_000));
+
+    // Alice loses her keys; Bob is her new, already-whitelisted wallet
+    await expect(
+      token.connect(compliance).recoverWallet(alice.address, bob.address),
+    )
+      .to.emit(token, "WalletRecovered")
+      .withArgs(alice.address, bob.address, TOKENS(60));
+
+    expect(await token.balanceOf(alice.address)).to.equal(0n);
+    expect(await token.balanceOf(bob.address)).to.equal(TOKENS(60));
+    expect(await token.whitelist(alice.address)).to.equal(false);
+    expect(await distributor.calculatePendingYield(alice.address)).to.equal(0n);
+    expect(await distributor.calculatePendingYield(bob.address)).to.equal(
+      USDC(600),
+    );
+
+    // Future yield accrues to the new wallet
+    await distributor.connect(issuer).depositRentalIncome(USDC(1_000));
+    await distributor.connect(bob).claimMyYield();
+    expect(await usdc.balanceOf(bob.address)).to.equal(USDC(1_200));
+    await expect(
+      distributor.connect(alice).claimMyYield(),
+    ).to.be.revertedWith("YieldDistributor: nothing to claim");
+  });
+
+  it("recovers a frozen wallet", async function () {
+    const { token, issuer, compliance, alice, bob } =
+      await networkHelpers.loadFixture(deploySystem);
+
+    await token.connect(issuer).mint(alice.address, TOKENS(5));
+    await token.connect(compliance).setFrozen(alice.address, true);
+    await token.connect(compliance).recoverWallet(alice.address, bob.address);
+    expect(await token.balanceOf(bob.address)).to.equal(TOKENS(5));
+  });
+
+  it("rejects recovering a wallet onto itself", async function () {
+    const { token, compliance, alice } =
+      await networkHelpers.loadFixture(deploySystem);
+    await expect(
+      token.connect(compliance).recoverWallet(alice.address, alice.address),
+    ).to.be.revertedWith("RWAToken: same wallet");
+  });
+
+  it("only accepts the recovery hook from the property token", async function () {
+    const { distributor, alice, bob } =
+      await networkHelpers.loadFixture(deploySystem);
+    await expect(
+      distributor.connect(alice).onWalletRecovered(alice.address, bob.address),
+    ).to.be.revertedWith("YieldDistributor: caller is not the property token");
+  });
+});
