@@ -11,7 +11,19 @@ income to token holders. Built with Hardhat 3, OpenZeppelin 5 and ethers v6.
 | `RWAToken` | `contracts/core/` | ERC-20 share of a property. Only whitelisted, non-frozen accounts can hold or move it; the issuer mints and burns; transfers can be paused. |
 | `AssetRegistry` | `contracts/core/` | On-chain record of each asset: name, valuation, hash of the legal documents, and its token. |
 | `YieldDistributor` | `contracts/finance/` | The issuer deposits rental income (USDC) and holders claim their pro-rata share. |
+| `TokenSale` | `contracts/finance/` | Primary sale. Whitelisted investors pay USDC into escrow. If the soft cap is reached, the treasury receives the USDC and buyers claim their tokens; otherwise buyers get a refund. |
 | `MockUSDC` | `contracts/finance/` | 6-decimal stablecoin for local testing. |
+
+### How the primary sale works
+
+1. While the sale is open, whitelisted, non-frozen investors call `buy(amount)`.
+   The cost is `amount × price` in USDC, rounded up. The USDC is held by the
+   sale contract, and a purchase can't push the total past the hard cap.
+2. After the end time, or as soon as the hard cap is reached, anyone can call
+   `finalize()`. The issuer can `cancel()` an active sale at any time.
+3. If the soft cap was met, the USDC goes to the treasury and buyers call
+   `claimTokens()`, which mints their tokens through RWAToken's compliance
+   checks. Otherwise buyers call `refund()`.
 
 ### How yield accounting works
 
@@ -50,3 +62,13 @@ npx hardhat ignition deploy --network sepolia ignition/modules/RWA.ts
 
 Override the asset details with Ignition parameters (`name`, `symbol`,
 `valuation`, `legalDocHash`).
+
+`ignition/modules/TokenSale.ts` deploys the stack above plus a `TokenSale` and
+gives the sale permission to mint. `startTime` and `endTime` (unix seconds) are
+required. Price, caps, minimum purchase and treasury have defaults you can
+override:
+
+```shell
+echo '{"TokenSaleModule":{"startTime":1767225600,"endTime":1769904000}}' > sale.json
+npx hardhat ignition deploy ignition/modules/TokenSale.ts --parameters sale.json
+```

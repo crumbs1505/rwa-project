@@ -19,8 +19,9 @@ Real-world asset tokenization on Hardhat 3 (mocha + ethers v6, OpenZeppelin 5, s
 - `contracts/core/RWAToken.sol` – whitelisted/freezable/pausable ERC-20; calls `YieldDistributor.onTokenTransfer` before every balance change
 - `contracts/core/AssetRegistry.sol` – asset metadata registry
 - `contracts/finance/YieldDistributor.sol` – rental income distribution (cumulative yield-per-token accounting)
+- `contracts/finance/TokenSale.sol` – escrowed primary sale (soft/hard cap, refunds); needs ISSUER_ROLE on RWAToken to mint on claim
 - `contracts/finance/MockUSDC.sol` – 6-decimal test stablecoin
-- `test/` – mocha tests; `ignition/modules/RWA.ts` – full-system deployment
+- `test/` – mocha tests; `ignition/modules/RWA.ts` – full-system deployment; `ignition/modules/TokenSale.ts` – sale on top of it
 
 Commands: `npm test`, `npx hardhat compile`, `npm run deploy:local`.
 
