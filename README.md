@@ -25,6 +25,24 @@ income to token holders. Built with Hardhat 3, OpenZeppelin 5 and ethers v6.
    `claimTokens()`, which mints their tokens through RWAToken's compliance
    checks. Otherwise buyers call `refund()`.
 
+### Enforcement and recovery
+
+Regulated tokens need ways to act on an account without the holder's
+signature:
+
+- **Seizure:** the issuer can `burn` from any account, including frozen or
+  de-whitelisted ones.
+- **Forced transfer:** compliance can `forcedTransfer` tokens out of any
+  account, for example on a court order. The receiver must still be
+  whitelisted and not frozen.
+- **Lost wallets:** compliance calls `recoverWallet(lost, replacement)` after
+  whitelisting the investor's new wallet. It moves the whole balance, moves
+  the unclaimed rental yield in `YieldDistributor`, and removes the lost
+  wallet from the whitelist.
+- **Unclaimed sale purchases:** the issuer calls
+  `TokenSale.recoverPurchase(lost, replacement)` to move a purchase that
+  hasn't been claimed yet, or the right to its refund if the sale failed.
+
 ### How yield accounting works
 
 `YieldDistributor` keeps a global `cumulativeYieldPerToken` that grows on each

@@ -16,7 +16,7 @@
 Real-world asset tokenization on Hardhat 3 (mocha + ethers v6, OpenZeppelin 5, solc 0.8.24).
 
 - `contracts/governance/RWARoles.sol` – shared AccessControl roles
-- `contracts/core/RWAToken.sol` – whitelisted/freezable/pausable ERC-20; calls `YieldDistributor.onTokenTransfer` before every balance change
+- `contracts/core/RWAToken.sol` – whitelisted/freezable/pausable ERC-20; calls `YieldDistributor.onTokenTransfer` before every balance change; issuer `burn`, `forcedTransfer` and `recoverWallet` skip sender checks (receiver still checked)
 - `contracts/core/AssetRegistry.sol` – asset metadata registry
 - `contracts/finance/YieldDistributor.sol` – rental income distribution (cumulative yield-per-token accounting)
 - `contracts/finance/TokenSale.sol` – escrowed primary sale (soft/hard cap, refunds); needs ISSUER_ROLE on RWAToken to mint on claim
