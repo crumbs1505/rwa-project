@@ -115,6 +115,18 @@ contract YieldDistributor is RWARoles, ReentrancyGuard, IYieldHook {
         if (to != address(0)) _snapshotHolderYield(to);
     }
 
+    function onWalletRecovered(address lostWallet, address newWallet) external {
+        require(
+            msg.sender == address(propertyToken),
+            "YieldDistributor: caller is not the property token"
+        );
+        _snapshotHolderYield(lostWallet);
+        _snapshotHolderYield(newWallet);
+
+        pendingYield[newWallet] += pendingYield[lostWallet];
+        pendingYield[lostWallet] = 0;
+    }
+
     // ── Internal ─────────────────────────────────────────────────────────
 
     // Calculates what the holder is owed up to this moment
