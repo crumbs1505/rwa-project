@@ -1,10 +1,12 @@
 {
   "name": "rwa-project",
   "version": "1.0.0",
-  "description": "",
+  "description": "Real world asset tokenization: compliant property token, asset registry and rental yield distribution",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat ignition deploy ignition/modules/RWA.ts"
   },
   "keywords": [],
   "author": "",
