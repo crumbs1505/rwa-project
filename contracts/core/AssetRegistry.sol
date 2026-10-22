@@ -2,8 +2,9 @@
 pragma solidity ^0.8.24;
 
 import "../governance/RWARoles.sol";
+import "../interfaces/IAssetRegistry.sol";
 
-contract AssetRegistry is RWARoles {
+contract AssetRegistry is RWARoles, IAssetRegistry {
     struct Asset {
         string name;
         uint256 valuation;
