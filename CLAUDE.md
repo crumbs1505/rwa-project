@@ -16,15 +16,21 @@
 Real-world asset tokenization on Hardhat 3 (mocha + ethers v6, OpenZeppelin 5, solc 0.8.24).
 
 - `contracts/governance/RWARoles.sol` – shared AccessControl roles
-- `contracts/core/RWAToken.sol` – whitelisted/freezable/pausable ERC-20; calls `YieldDistributor.onTokenTransfer` before every balance change; issuer `burn`, `forcedTransfer` and `recoverWallet` skip sender checks (receiver still checked)
+- `contracts/core/RWAToken.sol` – whitelisted/freezable/pausable ERC-20; calls `YieldDistributor.onTokenTransfer` before every balance change; sender checks live in `transfer`/`transferFrom`, receiver checks in `_update`, so issuer `burn`, `forcedTransfer` and `recoverWallet` skip sender checks without a bypass flag
 - `contracts/core/AssetRegistry.sol` – asset metadata registry; tokens with a registry set can only mint while their asset is active
 - `contracts/core/AssetFactory.sol` – deploys + wires token and distributor per property, registers it, hands roles to the owner (grant roles before renouncing admin)
 - `contracts/finance/YieldDistributor.sol` – rental income distribution (cumulative yield-per-token accounting)
 - `contracts/finance/TokenSale.sol` – escrowed primary sale (soft/hard cap, refunds); needs ISSUER_ROLE on RWAToken to mint on claim
 - `contracts/finance/MockUSDC.sol` – 6-decimal test stablecoin
-- `test/` – mocha tests; `ignition/modules/RWA.ts` – full-system deployment; `ignition/modules/TokenSale.ts` – sale on top of it; `ignition/modules/Platform.ts` – registry + factory
+- `test/*.ts` – mocha tests; `test/solidity/` – forge-std fuzz and invariant tests (run by `npx hardhat test solidity`)
+- `scripts/demo.ts` – deploys + seeds a local platform and writes `frontend/src/deployments.json`
+- `scripts/export-abis.mjs` – regenerates `frontend/src/abi.ts`; rerun it after any contract ABI change (CI fails if it is stale)
+- `frontend/` – Vite + React + viem app (separate npm project; `npm run build` typechecks and builds)
+- `ignition/modules/RWA.ts` – full-system deployment; `ignition/modules/TokenSale.ts` – sale on top of it; `ignition/modules/Platform.ts` – registry + factory
 
-Commands: `npm test`, `npx hardhat compile`, `npm run deploy:local`.
+Commands: `npm test`, `npm run coverage`, `npm run typecheck`, `npx hardhat compile`, `npm run node` + `npm run demo` (local demo), `cd frontend && npm run dev`.
+
+CI (`.github/workflows/ci.yml`) runs compile, typecheck, ABI sync check, tests with coverage, Slither 0.11.6 (fails on medium+, config in `slither.config.json`) and the frontend build.
 
 Any change to token balances must keep the yield hook in place; the regression tests in `test/RWA.ts` cover it.
 
@@ -35,3 +41,5 @@ Any change to token balances must keep the yield hook in place; the regression t
 1. `npm i solc@0.8.24` in a scratch directory.
 2. Copy its `soljson.js` to `~/.cache/hardhat-nodejs/compilers-v3/wasm/soljson-v0.8.24+commit.e11b9ed9.js` and to the same name under `linux-amd64/`, plus an empty `<that file>.does.not.work` marker in `linux-amd64/`.
 3. Write a `list.json` in both `wasm/` and `linux-amd64/` containing a single build entry for that file (`version` 0.8.24, `longVersion` 0.8.24+commit.e11b9ed9).
+
+Running Slither locally without `--ignore-compile` executes `hardhat clean --global`, which deletes this seeded cache; compile first and run `slither . --ignore-compile` (after a clean compile, since coverage builds confuse it).
