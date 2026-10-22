@@ -120,6 +120,23 @@ describe("RWAToken", function () {
     ).to.be.revertedWith("RWAToken: receiver frozen");
   });
 
+  it("applies sender checks to transferFrom as well", async function () {
+    const { token, issuer, compliance, alice, bob } =
+      await networkHelpers.loadFixture(deploySystem);
+
+    await token.connect(issuer).mint(alice.address, TOKENS(10));
+    await token.connect(alice).approve(bob.address, TOKENS(10));
+    await token.connect(compliance).setFrozen(alice.address, true);
+
+    await expect(
+      token.connect(bob).transferFrom(alice.address, bob.address, TOKENS(1)),
+    ).to.be.revertedWith("RWAToken: sender frozen");
+
+    await token.connect(compliance).setFrozen(alice.address, false);
+    await token.connect(bob).transferFrom(alice.address, bob.address, TOKENS(1));
+    expect(await token.balanceOf(bob.address)).to.equal(TOKENS(1));
+  });
+
   it("halts all transfers while paused", async function () {
     const { token, issuer, pauser, alice, bob } =
       await networkHelpers.loadFixture(deploySystem);
