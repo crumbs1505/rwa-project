@@ -37,9 +37,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Installs Node and the project's dependencies, compiles with Hardhat
-      # and fails on any finding of medium severity or above
-      - uses: crytic/slither-action@v0.4.1
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-          fail-on: medium
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: npm ci
+
+      # Slither >= 0.11.6 understands Hardhat 3 build output; compile first
+      # and let Slither read the artifacts. slither.config.json fails the job
+      # on medium-severity findings or above.
+      - name: Install Slither
+        run: pip install slither-analyzer==0.11.6
+
+      - name: Compile
+        run: npx hardhat compile
+
+      - name: Slither
+        run: slither . --ignore-compile
