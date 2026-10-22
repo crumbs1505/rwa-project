@@ -16,10 +16,6 @@ contract RWAToken is ERC20Pausable, RWARoles {
     // When set, new tokens can only be minted while the asset is active
     IAssetRegistry public assetRegistry;
 
-    // Set only for the duration of an issuer burn or compliance-forced move,
-    // so _update skips the sender checks (the sender may be frozen)
-    bool private _skipSenderChecks;
-
     event WhitelistUpdated(address indexed account, bool status);
     event FrozenUpdated(address indexed account, bool status);
     event YieldDistributorUpdated(address indexed distributor);
@@ -53,9 +49,7 @@ contract RWAToken is ERC20Pausable, RWARoles {
     // Burning works on frozen or de-whitelisted accounts so the issuer
     // can seize or redeem tokens from them
     function burn(address from, uint256 amount) external onlyRole(ISSUER_ROLE) {
-        _skipSenderChecks = true;
         _burn(from, amount);
-        _skipSenderChecks = false;
     }
 
     // Move tokens out of any account, e.g. on a court order. The receiver
@@ -65,7 +59,7 @@ contract RWAToken is ERC20Pausable, RWARoles {
         address to,
         uint256 amount
     ) external onlyRole(COMPLIANCE_ROLE) {
-        _forcedTransfer(from, to, amount);
+        _transfer(from, to, amount);
         emit ForcedTransfer(from, to, amount);
     }
 
@@ -79,14 +73,14 @@ contract RWAToken is ERC20Pausable, RWARoles {
         require(lostWallet != newWallet, "RWAToken: same wallet");
         uint256 amount = balanceOf(lostWallet);
 
-        _forcedTransfer(lostWallet, newWallet, amount);
-        if (address(yieldDistributor) != address(0)) {
-            yieldDistributor.onWalletRecovered(lostWallet, newWallet);
-        }
-
         whitelist[lostWallet] = false;
         emit WhitelistUpdated(lostWallet, false);
         emit WalletRecovered(lostWallet, newWallet, amount);
+
+        _transfer(lostWallet, newWallet, amount);
+        if (address(yieldDistributor) != address(0)) {
+            yieldDistributor.onWalletRecovered(lostWallet, newWallet);
+        }
     }
 
     function setWhitelist(
@@ -126,21 +120,37 @@ contract RWAToken is ERC20Pausable, RWARoles {
         _unpause();
     }
 
-    function _forcedTransfer(address from, address to, uint256 amount) internal {
-        _skipSenderChecks = true;
-        _transfer(from, to, amount);
-        _skipSenderChecks = false;
+    // Holder-initiated moves check the sender. Issuer burns and compliance
+    // actions go straight to _transfer/_burn and skip this on purpose.
+    function transfer(
+        address to,
+        uint256 value
+    ) public override returns (bool) {
+        _checkSender(msg.sender);
+        return super.transfer(to, value);
     }
 
+    function transferFrom(
+        address from,
+        address to,
+        uint256 value
+    ) public override returns (bool) {
+        _checkSender(from);
+        return super.transferFrom(from, to, value);
+    }
+
+    function _checkSender(address from) internal view {
+        require(whitelist[from], "RWAToken: sender not whitelisted");
+        require(!frozen[from], "RWAToken: sender frozen");
+    }
+
+    // Every path that credits an account (mint, transfer, forced transfer,
+    // recovery) requires an eligible receiver
     function _update(
         address from,
         address to,
         uint256 value
     ) internal override(ERC20Pausable) {
-        if (from != address(0) && !_skipSenderChecks) {
-            require(whitelist[from], "RWAToken: sender not whitelisted");
-            require(!frozen[from], "RWAToken: sender frozen");
-        }
         if (to != address(0)) {
             require(whitelist[to], "RWAToken: receiver not whitelisted");
             require(!frozen[to], "RWAToken: receiver frozen");
