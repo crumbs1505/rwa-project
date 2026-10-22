@@ -58,6 +58,16 @@ async function deploySystem() {
   };
 }
 
+describe("MockUSDC", function () {
+  it("uses 6 decimals and only lets the owner mint", async function () {
+    const { usdc, alice } = await networkHelpers.loadFixture(deploySystem);
+    expect(await usdc.decimals()).to.equal(6n);
+    await expect(
+      usdc.connect(alice).mint(alice.address, 1n),
+    ).to.be.revertedWithCustomError(usdc, "OwnableUnauthorizedAccount");
+  });
+});
+
 describe("RWAToken", function () {
   it("only lets the issuer mint and burn", async function () {
     const { token, issuer, alice } =
