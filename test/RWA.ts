@@ -125,6 +125,38 @@ describe("RWAToken", function () {
     expect(await token.balanceOf(bob.address)).to.equal(TOKENS(1));
   });
 
+  it("only mints while the asset is active in the registry", async function () {
+    const { token, registry, issuer, alice } =
+      await networkHelpers.loadFixture(deploySystem);
+    const tokenAddress = await token.getAddress();
+    await token.setAssetRegistry(await registry.getAddress());
+
+    // Not registered yet
+    await expect(
+      token.connect(issuer).mint(alice.address, TOKENS(1)),
+    ).to.be.revertedWith("RWAToken: asset not active");
+
+    await registry
+      .connect(issuer)
+      .registerAsset("A", 1, ethers.ZeroHash, tokenAddress);
+    await token.connect(issuer).mint(alice.address, TOKENS(1));
+
+    await registry.connect(issuer).deactivateAsset(0);
+    await expect(
+      token.connect(issuer).mint(alice.address, TOKENS(1)),
+    ).to.be.revertedWith("RWAToken: asset not active");
+
+    // Existing holders can still be burned or redeemed
+    await token.connect(issuer).burn(alice.address, TOKENS(1));
+  });
+
+  it("only lets the admin set the asset registry", async function () {
+    const { token, alice } = await networkHelpers.loadFixture(deploySystem);
+    await expect(
+      token.connect(alice).setAssetRegistry(alice.address),
+    ).to.be.revertedWithCustomError(token, "AccessControlUnauthorizedAccount");
+  });
+
   it("only lets the admin set the yield distributor", async function () {
     const { token, alice } = await networkHelpers.loadFixture(deploySystem);
     await expect(
