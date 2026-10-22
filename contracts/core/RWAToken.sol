@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol";
 import "../governance/RWARoles.sol";
 import "../interfaces/IYieldHook.sol";
+import "../interfaces/IAssetRegistry.sol";
 
 contract RWAToken is ERC20Pausable, RWARoles {
     mapping(address => bool) public whitelist;
@@ -12,6 +13,9 @@ contract RWAToken is ERC20Pausable, RWARoles {
     // Notified before every balance change so yield is settled on old balances
     IYieldHook public yieldDistributor;
 
+    // When set, new tokens can only be minted while the asset is active
+    IAssetRegistry public assetRegistry;
+
     // Set only for the duration of an issuer burn or compliance-forced move,
     // so _update skips the sender checks (the sender may be frozen)
     bool private _skipSenderChecks;
@@ -19,6 +23,7 @@ contract RWAToken is ERC20Pausable, RWARoles {
     event WhitelistUpdated(address indexed account, bool status);
     event FrozenUpdated(address indexed account, bool status);
     event YieldDistributorUpdated(address indexed distributor);
+    event AssetRegistryUpdated(address indexed registry);
     event ForcedTransfer(
         address indexed from,
         address indexed to,
@@ -37,6 +42,11 @@ contract RWAToken is ERC20Pausable, RWARoles {
     ) ERC20(name, symbol) RWARoles(admin) {}
 
     function mint(address to, uint256 amount) external onlyRole(ISSUER_ROLE) {
+        require(
+            address(assetRegistry) == address(0) ||
+                assetRegistry.isActiveToken(address(this)),
+            "RWAToken: asset not active"
+        );
         _mint(to, amount);
     }
 
@@ -100,6 +110,13 @@ contract RWAToken is ERC20Pausable, RWARoles {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         yieldDistributor = IYieldHook(distributor);
         emit YieldDistributorUpdated(distributor);
+    }
+
+    function setAssetRegistry(
+        address registry
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        assetRegistry = IAssetRegistry(registry);
+        emit AssetRegistryUpdated(registry);
     }
 
     function pause() external onlyRole(PAUSER_ROLE) {
