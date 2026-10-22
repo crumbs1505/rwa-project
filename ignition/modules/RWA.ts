@@ -20,6 +20,7 @@ export default buildModule("RWAModule", (m) => {
   const registry = m.contract("AssetRegistry", [admin]);
 
   m.call(token, "setYieldDistributor", [distributor]);
+  m.call(token, "setAssetRegistry", [registry]);
 
   const issuerRole = m.staticCall(token, "ISSUER_ROLE");
   const complianceRole = m.staticCall(token, "COMPLIANCE_ROLE");
