@@ -315,6 +315,63 @@ describe("AssetRegistry", function () {
       "AccessControlUnauthorizedAccount",
     );
   });
+  it("looks assets up by token and tracks whether they are active", async function () {
+    const { registry, token, issuer } =
+      await networkHelpers.loadFixture(deploySystem);
+    const tokenAddress = await token.getAddress();
+
+    expect(await registry.isActiveToken(tokenAddress)).to.equal(false);
+    await expect(registry.assetIdOf(tokenAddress)).to.be.revertedWith(
+      "AssetRegistry: token not registered",
+    );
+
+    await registry
+      .connect(issuer)
+      .registerAsset("Main Street Property", 1, ethers.ZeroHash, tokenAddress);
+    expect(await registry.assetIdOf(tokenAddress)).to.equal(0n);
+    expect(await registry.isActiveToken(tokenAddress)).to.equal(true);
+
+    await registry.connect(issuer).deactivateAsset(0);
+    expect(await registry.isActiveToken(tokenAddress)).to.equal(false);
+  });
+
+  it("rejects duplicate and zero-address tokens", async function () {
+    const { registry, token, issuer } =
+      await networkHelpers.loadFixture(deploySystem);
+    const tokenAddress = await token.getAddress();
+
+    await registry
+      .connect(issuer)
+      .registerAsset("A", 1, ethers.ZeroHash, tokenAddress);
+    await expect(
+      registry.connect(issuer).registerAsset("B", 1, ethers.ZeroHash, tokenAddress),
+    ).to.be.revertedWith("AssetRegistry: token already registered");
+    await expect(
+      registry
+        .connect(issuer)
+        .registerAsset("C", 1, ethers.ZeroHash, ethers.ZeroAddress),
+    ).to.be.revertedWith("AssetRegistry: zero token");
+  });
+
+  it("lets the issuer update an asset's valuation", async function () {
+    const { registry, token, issuer, alice } =
+      await networkHelpers.loadFixture(deploySystem);
+    await registry
+      .connect(issuer)
+      .registerAsset("A", USDC(1_000_000), ethers.ZeroHash, await token.getAddress());
+
+    await expect(registry.connect(issuer).updateValuation(0, USDC(1_200_000)))
+      .to.emit(registry, "ValuationUpdated")
+      .withArgs(0n, USDC(1_200_000));
+    expect((await registry.assets(0)).valuation).to.equal(USDC(1_200_000));
+
+    await expect(
+      registry.connect(issuer).updateValuation(1, 1),
+    ).to.be.revertedWith("AssetRegistry: unknown asset");
+    await expect(
+      registry.connect(alice).updateValuation(0, 1),
+    ).to.be.revertedWithCustomError(registry, "AccessControlUnauthorizedAccount");
+  });
 });
 
 describe("Forced transfer and recovery", function () {
