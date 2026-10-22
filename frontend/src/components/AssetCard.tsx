@@ -105,7 +105,9 @@ export default function AssetCard({
             )
           }
         >
-          Claim ${fmtUsdc(asset.myPendingYield)}
+          {asset.myPendingYield === 0n
+            ? "Nothing to claim"
+            : `Claim $${fmtUsdc(asset.myPendingYield)}`}
         </button>
       </section>
 
