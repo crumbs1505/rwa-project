@@ -79,10 +79,11 @@ contract AssetFactory is RWARoles {
         );
         distributorOf[token] = distributor;
 
-        _handOver(rwaToken, params.owner);
-        _handOver(yieldDistributor, params.owner);
+        // Grant token-only roles before the factory gives up its admin
         rwaToken.grantRole(COMPLIANCE_ROLE, params.owner);
         rwaToken.grantRole(PAUSER_ROLE, params.owner);
+        _handOver(rwaToken, params.owner);
+        _handOver(yieldDistributor, params.owner);
 
         emit AssetCreated(assetId, token, distributor, params.owner);
     }
