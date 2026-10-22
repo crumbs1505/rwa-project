@@ -11,7 +11,8 @@
     "coverage": "hardhat test --coverage",
     "typecheck": "tsc --noEmit",
     "node": "hardhat node",
-    "demo": "hardhat run scripts/demo.ts --network localhost"
+    "demo": "hardhat run scripts/demo.ts --network localhost",
+    "export-abis": "hardhat compile && node scripts/export-abis.mjs"
   },
   "keywords": [],
   "author": "",
