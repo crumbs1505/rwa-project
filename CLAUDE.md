@@ -17,11 +17,12 @@ Real-world asset tokenization on Hardhat 3 (mocha + ethers v6, OpenZeppelin 5, s
 
 - `contracts/governance/RWARoles.sol` – shared AccessControl roles
 - `contracts/core/RWAToken.sol` – whitelisted/freezable/pausable ERC-20; calls `YieldDistributor.onTokenTransfer` before every balance change; issuer `burn`, `forcedTransfer` and `recoverWallet` skip sender checks (receiver still checked)
-- `contracts/core/AssetRegistry.sol` – asset metadata registry
+- `contracts/core/AssetRegistry.sol` – asset metadata registry; tokens with a registry set can only mint while their asset is active
+- `contracts/core/AssetFactory.sol` – deploys + wires token and distributor per property, registers it, hands roles to the owner (grant roles before renouncing admin)
 - `contracts/finance/YieldDistributor.sol` – rental income distribution (cumulative yield-per-token accounting)
 - `contracts/finance/TokenSale.sol` – escrowed primary sale (soft/hard cap, refunds); needs ISSUER_ROLE on RWAToken to mint on claim
 - `contracts/finance/MockUSDC.sol` – 6-decimal test stablecoin
-- `test/` – mocha tests; `ignition/modules/RWA.ts` – full-system deployment; `ignition/modules/TokenSale.ts` – sale on top of it
+- `test/` – mocha tests; `ignition/modules/RWA.ts` – full-system deployment; `ignition/modules/TokenSale.ts` – sale on top of it; `ignition/modules/Platform.ts` – registry + factory
 
 Commands: `npm test`, `npx hardhat compile`, `npm run deploy:local`.
 

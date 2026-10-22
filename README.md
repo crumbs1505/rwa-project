@@ -9,10 +9,27 @@ income to token holders. Built with Hardhat 3, OpenZeppelin 5 and ethers v6.
 | --- | --- | --- |
 | `RWARoles` | `contracts/governance/` | Shared roles: `ISSUER_ROLE`, `COMPLIANCE_ROLE`, `PAUSER_ROLE` on top of OpenZeppelin `AccessControl`. |
 | `RWAToken` | `contracts/core/` | ERC-20 share of a property. Only whitelisted, non-frozen accounts can hold or move it; the issuer mints and burns; transfers can be paused. |
-| `AssetRegistry` | `contracts/core/` | On-chain record of each asset: name, valuation, hash of the legal documents, and its token. |
+| `AssetRegistry` | `contracts/core/` | On-chain record of each asset: name, valuation, hash of the legal documents, and its token. A token can only mint while its asset is active here. |
+| `AssetFactory` | `contracts/core/` | Launches a new property in one transaction: deploys its token and distributor, links them, registers the asset, and hands every role to the asset owner. |
 | `YieldDistributor` | `contracts/finance/` | The issuer deposits rental income (USDC) and holders claim their pro-rata share. |
 | `TokenSale` | `contracts/finance/` | Primary sale. Whitelisted investors pay USDC into escrow. If the soft cap is reached, the treasury receives the USDC and buyers claim their tokens; otherwise buyers get a refund. |
 | `MockUSDC` | `contracts/finance/` | 6-decimal stablecoin for local testing. |
+
+### Launching a property
+
+Each property is its own `RWAToken` + `YieldDistributor` pair, and every
+property is recorded in one shared `AssetRegistry`. `AssetFactory.createAsset`
+does the whole setup in one call:
+
+1. Deploys the token and distributor, with the factory as temporary admin.
+2. Connects the token to the distributor and the registry, and registers the
+   asset.
+3. Grants the owner admin, issuer, compliance and pauser roles, then gives
+   up its own admin rights.
+
+When the issuer deactivates an asset in the registry, minting stops for that
+token. Burns, transfers and yield claims keep working, so holders can still be
+redeemed.
 
 ### How the primary sale works
 
@@ -80,6 +97,11 @@ npx hardhat ignition deploy --network sepolia ignition/modules/RWA.ts
 
 Override the asset details with Ignition parameters (`name`, `symbol`,
 `valuation`, `legalDocHash`).
+
+`ignition/modules/Platform.ts` (`npm run deploy:platform`) deploys the
+multi-property setup instead: MockUSDC, a shared `AssetRegistry` and an
+`AssetFactory`. The factory gets permission to register assets and the
+deployer gets permission to launch them.
 
 `ignition/modules/TokenSale.ts` deploys the stack above plus a `TokenSale` and
 gives the sale permission to mint. `startTime` and `endTime` (unix seconds) are
